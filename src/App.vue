@@ -1,138 +1,169 @@
 <script setup lang="ts">
-import { ref, watch } from "vue";
+import { ref, computed } from "vue";
 import {
-  createTV,
-  createRadio,
-  type Device,
-  createBasicRemote,
-  createAdvancedRemote,
-  type Remote,
-  type AdvancedRemote
-} from "./bridge/bridge";
+  createCart,
+  createCaretaker,
+  type CartItem,
+  type CartState,
+  formatTime,
+} from "./memento/memento";
 
-type DeviceKind = "TV" | "Radio";
-type RemoteKind = "Basic" | "Advanced";
+// 샘플 상품
+const catalog: CartItem[] = [
+  { id: "A", name: "에스프레소", price: 3000, qty: 1 },
+  { id: "B", name: "아메리카노", price: 4000, qty: 1 },
+  { id: "C", name: "카페라떼", price: 4500, qty: 1 },
+  { id: "D", name: "치즈케이크", price: 6500, qty: 1 },
+];
 
-const deviceKind = ref<DeviceKind>("TV");
-const remoteKind = ref<RemoteKind>("Basic");
+// Originator + Caretaker
+const cart = createCart();
+const caretaker = createCaretaker(200);
 
-let device: Device = createTV("Living Room TV");
-let remote: Remote | AdvancedRemote = createBasicRemote(device);
+// UI 반영용 상태
+const items = ref<CartItem[]>(cart.getState().items);
 
-const name = ref(device.getName());
-const power = ref(device.isOn());
-const volume = ref(device.getVolume());
-
+// 동기화
 function syncUI() {
-  name.value = device.getName();
-  power.value = device.isOn();
-  volume.value = device.getVolume();
+  items.value = cart.getState().items;
+}
+function save(tag?: string) {
+  caretaker.save(cart, tag);
 }
 
-function rebuildDevice() {
-  device = deviceKind.value === "TV"
-      ? createTV("Living Room TV")
-      : createRadio("Kitchen Radio");
-  rebuildRemote();
+// 처음 스냅샷 저장
+save("초기");
+
+// 장바구니 조작
+function add(it: CartItem) {
+  cart.addItem({ ...it, qty: 1 });
+  save(`Add ${it.name}`);
+  syncUI();
+}
+function inc(id: string) {
+  const s = cart.getState();
+  const target = s.items.find((x) => x.id === id);
+  if (!target) return;
+  cart.setQty(id, target.qty + 1);
+  save(`+ ${target.name}`);
+  syncUI();
+}
+function dec(id: string) {
+  const s = cart.getState();
+  const target = s.items.find((x) => x.id === id);
+  if (!target) return;
+  cart.setQty(id, Math.max(0, target.qty - 1));
+  save(`- ${target.name}`);
+  syncUI();
+}
+function remove(id: string) {
+  const s = cart.getState();
+  const target = s.items.find((x) => x.id === id);
+  cart.remove(id);
+  save(`Remove ${target?.name ?? id}`);
+  syncUI();
+}
+function clearAll() {
+  cart.clear();
+  save("Clear cart");
   syncUI();
 }
 
-function rebuildRemote() {
-  remote = remoteKind.value === "Basic"
-      ? createBasicRemote(device)
-      : createAdvancedRemote(device);
-  syncUI();
-}
+// Undo/Redo
+function undo() { caretaker.undo(cart); syncUI(); }
+function redo() { caretaker.redo(cart); syncUI(); }
 
-watch(deviceKind, rebuildDevice, { immediate: true });
-watch(remoteKind, rebuildRemote, { immediate: true });
-
-function togglePower() { remote.togglePower(); syncUI(); }
-function volUp() { remote.volumeUp(); syncUI(); }
-function volDown() { remote.volumeDown(); syncUI(); }
-function mute() { ('mute' in remote) && remote.mute(); syncUI(); }
+// 합계
+const subtotal = computed(() =>
+    items.value.reduce((sum, it) => sum + it.price * it.qty, 0)
+);
 </script>
 
 <template>
-  <main>
-    <h1>Bridge Pattern — Remote Control Demo</h1>
+  <main style="padding:24px; max-width:1000px; margin:auto; font-family:system-ui, sans-serif;">
+    <h1>메멘토 패턴 — 장바구니</h1>
 
-    <div class="options">
-      <label>Device:
-        <select v-model="deviceKind">
-          <option value="TV">TV</option>
-          <option value="Radio">Radio</option>
-        </select>
-      </label>
+    <section style="display:grid; grid-template-columns: 1fr 1fr; gap:16px; align-items:start;">
 
-      <label>Remote:
-        <select v-model="remoteKind">
-          <option value="Basic">Basic</option>
-          <option value="Advanced">Advanced</option>
-        </select>
-      </label>
-    </div>
+      <!-- 상품 목록 -->
+      <div style="border:1px solid #ddd; border-radius:10px; padding:12px;">
+        <h3 style="margin:4px 0 10px 0;">상품</h3>
+        <div style="display:grid; grid-template-columns: 1fr auto; gap:8px;">
+          <div v-for="p in catalog" :key="p.id" style="display:flex; gap:8px; align-items:center; border:1px solid #eee; border-radius:8px; padding:8px;">
+            <div style="flex:1;">
+              <div><b>{{ p.name }}</b></div>
+              <small>{{ p.price.toLocaleString() }}원</small>
+            </div>
+            <button @click="add(p)">담기</button>
+          </div>
+        </div>
+      </div>
 
-    <section>
-      <div><b>Device</b>: {{ name }}</div>
-      <div><b>Power</b>: <span :style="{color: power ? '#4caf50' : '#e91e63'}">{{ power ? 'ON' : 'OFF' }}</span></div>
-      <div><b>Volume</b>: {{ volume }}</div>
+      <!-- 장바구니 + Undo/Redo -->
+      <div style="border:1px solid #ddd; border-radius:10px; overflow:hidden;">
+        <header style="display:flex; justify-content:space-between; align-items:center; padding:10px 12px; background:#333;">
+          <b>장바구니</b>
+          <div style="display:flex; gap:8px;">
+            <button @click="undo" :disabled="!caretaker.canUndo()">↩️ Undo</button>
+            <button @click="redo" :disabled="!caretaker.canRedo()">↪️ Redo</button>
+            <button @click="clearAll">🧹 비우기</button>
+          </div>
+        </header>
 
-      <div class="controls">
-        <button @click="togglePower">Power</button>
-        <button @click="volDown">-</button>
-        <button @click="volUp">+</button>
-        <button v-if="remoteKind === 'Advanced'" @click="mute">Mute</button>
+        <div style="padding:12px;">
+          <div v-if="!items.length" style="opacity:.7;">담긴 상품이 없습니다.</div>
+
+          <div v-for="it in items" :key="it.id"
+               style="display:grid; grid-template-columns: 1fr auto auto auto; gap:8px; align-items:center; border-bottom:1px solid #f0f0f0; padding:8px 0;">
+            <div>
+              <div><b>{{ it.name }}</b></div>
+              <small>{{ it.price.toLocaleString() }}원</small>
+            </div>
+            <div style="display:flex; gap:6px; align-items:center;">
+              <button @click="dec(it.id)">-</button>
+              <span style="min-width:24px; text-align:center;">{{ it.qty }}</span>
+              <button @click="inc(it.id)">+</button>
+            </div>
+            <div style="text-align:right; min-width:90px;">
+              <b>{{ (it.price * it.qty).toLocaleString() }}원</b>
+            </div>
+            <div>
+              <button @click="remove(it.id)">삭제</button>
+            </div>
+          </div>
+
+          <div style="text-align:right; margin-top:10px;">
+            <b>합계:</b> {{ subtotal.toLocaleString() }}원
+          </div>
+        </div>
+
+        <hr style="border:none; border-top:1px solid #eee; margin:0;" />
+
+        <!-- 히스토리 -->
+        <div style="padding:12px;">
+          <h4 style="margin:0 0 8px 0;">스냅샷 히스토리 (undo stack)</h4>
+          <ol style="margin:0; padding-left:18px; max-height:180px; overflow:auto;">
+            <li v-for="m in caretaker.history().undo" :key="m.ts">
+              {{ formatTime(m.ts) }} <span v-if="m.tag"> — {{ m.tag }}</span>
+            </li>
+          </ol>
+          <div v-if="caretaker.history().redo.length" style="opacity:.7; margin-top:6px;">
+            <small>redo 대기 {{ caretaker.history().redo.length }}개</small>
+          </div>
+        </div>
       </div>
     </section>
   </main>
 </template>
 
 <style scoped>
-main {
-  background: #1e1e1e;
-  min-height: 100vh;
-  padding: 40px;
-  color: #eee;
-  text-align: center;
-  font-family: sans-serif;
-}
-
-h1 {
-  margin-bottom: 20px;
-}
-
-.options {
-  margin-bottom: 20px;
-}
-
-section {
-  margin: 0 auto;
-  width: 280px;
-  background: #2c2c2c;
-  padding: 20px;
-  border-radius: 10px;
-}
-
-.controls {
-  margin-top: 12px;
-}
-
 button {
-  margin: 4px;
-  color: #fff;
-  background: #555;
+  padding: 6px 12px;
   border: none;
-  border-radius: 6px;
-  padding: 8px 14px;
+  border-radius: 8px;
   cursor: pointer;
+  background: #444; color: #fff; transition: .15s;
 }
-
-button:hover {
-  background: #777;
-}
-
-select {
-  margin-left: 8px;
-}
+button:hover { background: #666; }
+button:disabled { opacity: .45; cursor: not-allowed; }
 </style>
