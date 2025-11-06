@@ -1,0 +1,139 @@
+<script setup lang="ts">
+  import { ref, watch } from "vue";
+  import {
+    createTV,
+    createRadio,
+    type Device,
+    createBasicRemote,
+    createAdvancedRemote,
+    type Remote,
+    type AdvancedRemote
+  } from "./bridge/bridge";
+
+  type DeviceKind = "TV" | "Radio";
+  type RemoteKind = "Basic" | "Advanced";
+
+  const deviceKind = ref<DeviceKind>("TV");
+  const remoteKind = ref<RemoteKind>("Basic");
+
+  let device: Device = createTV("Living Room TV");
+  let remote: Remote | AdvancedRemote = createBasicRemote(device);
+
+  const name = ref(device.getName());
+  const power = ref(device.isOn());
+  const volume = ref(device.getVolume());
+
+  function syncUI() {
+    name.value = device.getName();
+    power.value = device.isOn();
+    volume.value = device.getVolume();
+  }
+
+  function rebuildDevice() {
+    device = deviceKind.value === "TV"
+        ? createTV("Living Room TV")
+        : createRadio("Kitchen Radio");
+    rebuildRemote();
+    syncUI();
+  }
+
+  function rebuildRemote() {
+    remote = remoteKind.value === "Basic"
+        ? createBasicRemote(device)
+        : createAdvancedRemote(device);
+    syncUI();
+  }
+
+  watch(deviceKind, rebuildDevice, { immediate: true });
+  watch(remoteKind, rebuildRemote, { immediate: true });
+
+  function togglePower() { remote.togglePower(); syncUI(); }
+  function volUp() { remote.volumeUp(); syncUI(); }
+  function volDown() { remote.volumeDown(); syncUI(); }
+  function mute() { ('mute' in remote) && remote.mute(); syncUI(); }
+</script>
+
+<template>
+  <main>
+    <h1>Bridge Pattern — Remote Control Demo</h1>
+
+    <div class="options">
+      <label>Device:
+        <select v-model="deviceKind">
+          <option value="TV">TV</option>
+          <option value="Radio">Radio</option>
+        </select>
+      </label>
+
+      <label>Remote:
+        <select v-model="remoteKind">
+          <option value="Basic">Basic</option>
+          <option value="Advanced">Advanced</option>
+        </select>
+      </label>
+    </div>
+
+    <section>
+      <div><b>Device</b>: {{ name }}</div>
+      <div><b>Power</b>: <span :style="{color: power ? '#4caf50' : '#e91e63'}">{{ power ? 'ON' : 'OFF' }}</span></div>
+      <div><b>Volume</b>: {{ volume }}</div>
+
+      <div class="controls">
+        <button @click="togglePower">Power</button>
+        <button @click="volDown">-</button>
+        <button @click="volUp">+</button>
+        <button v-if="remoteKind === 'Advanced'" @click="mute">Mute</button>
+      </div>
+    </section>
+  </main>
+</template>
+
+<style scoped>
+  main {
+    background: #1e1e1e;
+    min-height: 100vh;
+    padding: 40px;
+    color: #eee;
+    text-align: center;
+    font-family: sans-serif;
+  }
+
+  h1 {
+    margin-bottom: 20px;
+  }
+
+  .options {
+    margin-bottom: 20px;
+  }
+
+  section {
+    margin: 0 auto;
+    width: 280px;
+    background: #2c2c2c;
+    padding: 20px;
+    border-radius: 10px;
+  }
+
+  .controls {
+    margin-top: 12px;
+  }
+
+  button {
+    margin: 4px;
+    color: #fff;
+    background: #555;
+    border: none;
+    border-radius: 6px;
+    padding: 8px 14px;
+    cursor: pointer;
+
+  }
+
+  button:hover {
+    background: #777;
+  }
+
+  select {
+    margin-left: 8px;
+  }
+</style>
