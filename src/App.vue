@@ -1,38 +1,55 @@
 <script setup lang="ts">
 import { ref } from "vue";
-import { Singleton } from "./services/singleton";
+import { Dialog, WindowsDialog, MacDialog } from "./factory/dialog";
 
-// 싱글톤 인스턴스 가져오기
-const instance = Singleton.getInstance();
+const result = ref("");
+let dialog: Dialog | null = null;
 
-const message = ref("");
+function setOS(os: "Windows" | "Mac") {
+  dialog = os === "Windows" ? new WindowsDialog() : new MacDialog();
+  result.value = ` ${os} 환경 제조 공장 선택됨`;
+}
 
-function handleClick() {
-  message.value = instance.sayHello();
+function createButton() {
+  if (!dialog) {
+    result.value = "⚠️ 먼저 OS를 선택하세요!";
+    return;
+  }
+  const { label, clicked } = dialog.render();
+  result.value = `${label}\n ${clicked}`;
 }
 </script>
 
 <template>
   <main style="padding: 24px">
-    <h1>Eager Singleton Demo</h1>
+    <h1>Factory Method Pattern Demo</h1>
+    <p>OS에 따라 다른 버튼을 생성합니다 ✔</p>
 
-    <button @click="handleClick">
-      싱글톤 메서드 호출하기
-    </button>
+    <button @click="setOS('Windows')">Windows 설정</button>
+    <button @click="setOS('Mac')">Mac 설정</button>
 
-    <p style="margin-top: 16px;">{{ message }}</p>
+    <hr style="margin: 16px 0" />
+
+    <button @click="createButton">버튼 생성</button>
+
+    <pre style="margin-top: 20px; background: #444; padding: 16px; border-radius: 8px;">
+{{ result }}
+    </pre>
   </main>
 </template>
 
 <style scoped>
 button {
-  padding: 10px 18px;
+  margin-right: 10px;
+  padding: 8px 14px;
+  border: none;
   border-radius: 8px;
-  border: 1px solid #aaa;
   cursor: pointer;
-  background: gray;
+  background: #444;
+  color: #fff;
+  transition: 0.15s;
 }
 button:hover {
-  background: #e8e8e8;
+  background: #666;
 }
 </style>
