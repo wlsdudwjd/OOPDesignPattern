@@ -1,110 +1,138 @@
 <script setup lang="ts">
-import { ref } from "vue";
+import { ref, watch } from "vue";
 import {
-  listPrototypeKeys,
-  createFromPrototype,
-  type PrototypeKey,
-  type Shape,
-} from "./prototype/prototype";
+  createTV,
+  createRadio,
+  type Device,
+  createBasicRemote,
+  createAdvancedRemote,
+  type Remote,
+  type AdvancedRemote
+} from "./bridge/bridge";
 
-const keys = listPrototypeKeys();
-const selected = ref<PrototypeKey>(keys[0]);
-const item = ref<Shape | null>(null);
-const log = ref<string[]>([]);
-const pushLog = (s: string) => { log.value.push(s); console.log(s); };
+type DeviceKind = "TV" | "Radio";
+type RemoteKind = "Basic" | "Advanced";
 
-function makeClone() {
-  pushLog("🟡 makeClone 클릭됨");
-  item.value = createFromPrototype(selected.value);
-  if (item.value) {
-    pushLog(`✅ '${selected.value}'에서 복제 성공`);
-  } else {
-    pushLog("❌ 복제 실패: item이 null");
-  }
+const deviceKind = ref<DeviceKind>("TV");
+const remoteKind = ref<RemoteKind>("Basic");
+
+let device: Device = createTV("Living Room TV");
+let remote: Remote | AdvancedRemote = createBasicRemote(device);
+
+const name = ref(device.getName());
+const power = ref(device.isOn());
+const volume = ref(device.getVolume());
+
+function syncUI() {
+  name.value = device.getName();
+  power.value = device.isOn();
+  volume.value = device.getVolume();
 }
 
-function nudge(dx: number, dy: number) {
-  if (!item.value) return;
-  item.value.x += dx;
-  item.value.y += dy;
+function rebuildDevice() {
+  device = deviceKind.value === "TV"
+      ? createTV("Living Room TV")
+      : createRadio("Kitchen Radio");
+  rebuildRemote();
+  syncUI();
 }
-function grow() {
-  if (!item.value) return;
-  if (item.value.kind === "circle") item.value.radius += 5;
-  else { item.value.width += 8; item.value.height += 4; }
+
+function rebuildRemote() {
+  remote = remoteKind.value === "Basic"
+      ? createBasicRemote(device)
+      : createAdvancedRemote(device);
+  syncUI();
 }
-function shrink() {
-  if (!item.value) return;
-  if (item.value.kind === "circle") item.value.radius = Math.max(1, item.value.radius - 5);
-  else {
-    item.value.width = Math.max(2, item.value.width - 8);
-    item.value.height = Math.max(2, item.value.height - 4);
-  }
-}
-function setColor(c: string) {
-  if (!item.value) return;
-  item.value.color = c;
-}
+
+watch(deviceKind, rebuildDevice, { immediate: true });
+watch(remoteKind, rebuildRemote, { immediate: true });
+
+function togglePower() { remote.togglePower(); syncUI(); }
+function volUp() { remote.volumeUp(); syncUI(); }
+function volDown() { remote.volumeDown(); syncUI(); }
+function mute() { ('mute' in remote) && remote.mute(); syncUI(); }
 </script>
 
 <template>
-  <main style="padding:24px; max-width:820px;">
-    <h1>Prototype Pattern</h1>
+  <main>
+    <h1>Bridge Pattern — Remote Control Demo</h1>
 
-    <div style="display:flex; gap:12px; align-items:center; margin-bottom:12px;">
-      <select v-model="selected" style="padding:8px 10px; border:1px solid #ccc; border-radius:10px;">
-        <option v-for="k in keys" :key="k" :value="k">{{ k }}</option>
-      </select>
-      <button @click="makeClone">복제본 만들기</button>
-    </div>
+    <div class="options">
+      <label>Device:
+        <select v-model="deviceKind">
+          <option value="TV">TV</option>
+          <option value="Radio">Radio</option>
+        </select>
+      </label>
 
-    <svg viewBox="0 0 220 160" width="440" height="320"
-         style="background:#fafafa;border:1px solid #ddd;border-radius:10px;">
-      <g v-if="item">
-        <circle
-            v-if="item.kind==='circle'"
-            :cx="item.x + 110"  :cy="item.y + 80"
-            :r="item.radius"
-            :fill="item.color" stroke="#333" stroke-width="1"
-        />
-        <rect
-            v-else
-            :x="item.x + 110 - item.width/2" :y="item.y + 80 - item.height/2"
-            :width="item.width" :height="item.height"
-            :fill="item.color" stroke="#333" stroke-width="1" rx="4" ry="4"
-        />
-      </g>
-    </svg>
-
-    <!-- 조작 패널 -->
-    <div v-if="item" style="margin-top:12px; display:flex; gap:10px; flex-wrap:wrap;">
-      <button @click="nudge(-5,0)">←</button>
-      <button @click="nudge(5,0)">→</button>
-      <button @click="nudge(0,-5)">↑</button>
-      <button @click="nudge(0,5)">↓</button>
-      <button @click="grow">크게</button>
-      <button @click="shrink">작게</button>
-
-      <label style="margin-left:8px;">색상:
-        <input type="color" :value="item.color"
-               @input="setColor(($event.target as HTMLInputElement).value)" />
+      <label>Remote:
+        <select v-model="remoteKind">
+          <option value="Basic">Basic</option>
+          <option value="Advanced">Advanced</option>
+        </select>
       </label>
     </div>
 
-    <h3 style="margin-top:16px;">로그</h3>
-    <pre style="background:#333; padding:12px; border-radius:8px; white-space:pre-wrap;">
-{{ log.join('\n') }}
-    </pre>
+    <section>
+      <div><b>Device</b>: {{ name }}</div>
+      <div><b>Power</b>: <span :style="{color: power ? '#4caf50' : '#e91e63'}">{{ power ? 'ON' : 'OFF' }}</span></div>
+      <div><b>Volume</b>: {{ volume }}</div>
+
+      <div class="controls">
+        <button @click="togglePower">Power</button>
+        <button @click="volDown">-</button>
+        <button @click="volUp">+</button>
+        <button v-if="remoteKind === 'Advanced'" @click="mute">Mute</button>
+      </div>
+    </section>
   </main>
 </template>
 
 <style scoped>
-button {
-  padding: 8px 14px;
-  border: none;
-  border-radius: 10px;
-  cursor: pointer;
-  background: #444; color: #fff; transition: .15s;
+main {
+  background: #1e1e1e;
+  min-height: 100vh;
+  padding: 40px;
+  color: #eee;
+  text-align: center;
+  font-family: sans-serif;
 }
-button:hover { background: #666; }
+
+h1 {
+  margin-bottom: 20px;
+}
+
+.options {
+  margin-bottom: 20px;
+}
+
+section {
+  margin: 0 auto;
+  width: 280px;
+  background: #2c2c2c;
+  padding: 20px;
+  border-radius: 10px;
+}
+
+.controls {
+  margin-top: 12px;
+}
+
+button {
+  margin: 4px;
+  color: #fff;
+  background: #555;
+  border: none;
+  border-radius: 6px;
+  padding: 8px 14px;
+  cursor: pointer;
+}
+
+button:hover {
+  background: #777;
+}
+
+select {
+  margin-left: 8px;
+}
 </style>
