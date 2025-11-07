@@ -4,7 +4,7 @@
 Vue 3 + TypeScript 기반 UI를 통해 **직접 조작하면서 이해할 수 있도록** 만든 데모입니다.
 
 ---
-### 현재 App.vue에는 memento을 실행하기 위한 코드가 업로드 되어있습니다.  
+### 현재 App.vue에는 prototype을 실행하기 위한 코드가 업로드 되어있습니다.  
 ### Appvue 폴더 내의 bridge.txt, memento.txt, prototype.txt 파일을 각각 App.vue로 복사하여 실행할 수 있습니다.
 
 ---
