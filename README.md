@@ -56,6 +56,12 @@ Vue 3 + TypeScript 기반 UI를 통해 **직접 조작하면서 이해할 수 �
 | 복잡한 객체 생성 비용 절감 | 원본 프로토타입만 정의하고 계속 복제 |
 
 ---
+
+## 사용예제
+
+![prototype](public/prototype.png)
+
+---
 # 2. Bridge Pattern — 기능 및 사용 방법 설명
 
 ## Bridge 화면 조작 가이드
@@ -99,6 +105,12 @@ Vue 3 + TypeScript 기반 UI를 통해 **직접 조작하면서 이해할 수 �
                       ↓
 (구현 계층) Device → TV, Radio
 ```
+
+---
+
+## 사용예제
+
+![bridge](public/bridge.png)
 
 ---
 # 3. Memento Pattern
@@ -145,6 +157,11 @@ Vue 3 + TypeScript 기반 UI를 통해 **직접 조작하면서 이해할 수 �
 
 ---
 
+## 사용예제
+
+![memento](public/memento.png)
+
+---
 ##  폴더 구조
 
 ```

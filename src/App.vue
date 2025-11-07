@@ -1,169 +1,110 @@
 <script setup lang="ts">
-import { ref, computed } from "vue";
+import { ref } from "vue";
 import {
-  createCart,
-  createCaretaker,
-  type CartItem,
-  type CartState,
-  formatTime,
-} from "./memento/memento";
+  listPrototypeKeys,
+  createFromPrototype,
+  type PrototypeKey,
+  type Shape,
+} from "./prototype/prototype";
 
-// 샘플 상품
-const catalog: CartItem[] = [
-  { id: "A", name: "에스프레소", price: 3000, qty: 1 },
-  { id: "B", name: "아메리카노", price: 4000, qty: 1 },
-  { id: "C", name: "카페라떼", price: 4500, qty: 1 },
-  { id: "D", name: "치즈케이크", price: 6500, qty: 1 },
-];
+const keys = listPrototypeKeys();
+const selected = ref<PrototypeKey>(keys[0]);
+const item = ref<Shape | null>(null);
+const log = ref<string[]>([]);
+const pushLog = (s: string) => { log.value.push(s); console.log(s); };
 
-// Originator + Caretaker
-const cart = createCart();
-const caretaker = createCaretaker(200);
-
-// UI 반영용 상태
-const items = ref<CartItem[]>(cart.getState().items);
-
-// 동기화
-function syncUI() {
-  items.value = cart.getState().items;
-}
-function save(tag?: string) {
-  caretaker.save(cart, tag);
+function makeClone() {
+  pushLog("🟡 makeClone 클릭됨");
+  item.value = createFromPrototype(selected.value);
+  if (item.value) {
+    pushLog(`✅ '${selected.value}'에서 복제 성공`);
+  } else {
+    pushLog("❌ 복제 실패: item이 null");
+  }
 }
 
-// 처음 스냅샷 저장
-save("초기");
-
-// 장바구니 조작
-function add(it: CartItem) {
-  cart.addItem({ ...it, qty: 1 });
-  save(`Add ${it.name}`);
-  syncUI();
+function nudge(dx: number, dy: number) {
+  if (!item.value) return;
+  item.value.x += dx;
+  item.value.y += dy;
 }
-function inc(id: string) {
-  const s = cart.getState();
-  const target = s.items.find((x) => x.id === id);
-  if (!target) return;
-  cart.setQty(id, target.qty + 1);
-  save(`+ ${target.name}`);
-  syncUI();
+function grow() {
+  if (!item.value) return;
+  if (item.value.kind === "circle") item.value.radius += 5;
+  else { item.value.width += 8; item.value.height += 4; }
 }
-function dec(id: string) {
-  const s = cart.getState();
-  const target = s.items.find((x) => x.id === id);
-  if (!target) return;
-  cart.setQty(id, Math.max(0, target.qty - 1));
-  save(`- ${target.name}`);
-  syncUI();
+function shrink() {
+  if (!item.value) return;
+  if (item.value.kind === "circle") item.value.radius = Math.max(1, item.value.radius - 5);
+  else {
+    item.value.width = Math.max(2, item.value.width - 8);
+    item.value.height = Math.max(2, item.value.height - 4);
+  }
 }
-function remove(id: string) {
-  const s = cart.getState();
-  const target = s.items.find((x) => x.id === id);
-  cart.remove(id);
-  save(`Remove ${target?.name ?? id}`);
-  syncUI();
+function setColor(c: string) {
+  if (!item.value) return;
+  item.value.color = c;
 }
-function clearAll() {
-  cart.clear();
-  save("Clear cart");
-  syncUI();
-}
-
-// Undo/Redo
-function undo() { caretaker.undo(cart); syncUI(); }
-function redo() { caretaker.redo(cart); syncUI(); }
-
-// 합계
-const subtotal = computed(() =>
-    items.value.reduce((sum, it) => sum + it.price * it.qty, 0)
-);
 </script>
 
 <template>
-  <main style="padding:24px; max-width:1000px; margin:auto; font-family:system-ui, sans-serif;">
-    <h1>메멘토 패턴 — 장바구니</h1>
+  <main style="padding:24px; max-width:820px;">
+    <h1>Prototype Pattern</h1>
 
-    <section style="display:grid; grid-template-columns: 1fr 1fr; gap:16px; align-items:start;">
+    <div style="display:flex; gap:12px; align-items:center; margin-bottom:12px;">
+      <select v-model="selected" style="padding:8px 10px; border:1px solid #ccc; border-radius:10px;">
+        <option v-for="k in keys" :key="k" :value="k">{{ k }}</option>
+      </select>
+      <button @click="makeClone">복제본 만들기</button>
+    </div>
 
-      <!-- 상품 목록 -->
-      <div style="border:1px solid #ddd; border-radius:10px; padding:12px;">
-        <h3 style="margin:4px 0 10px 0;">상품</h3>
-        <div style="display:grid; grid-template-columns: 1fr auto; gap:8px;">
-          <div v-for="p in catalog" :key="p.id" style="display:flex; gap:8px; align-items:center; border:1px solid #eee; border-radius:8px; padding:8px;">
-            <div style="flex:1;">
-              <div><b>{{ p.name }}</b></div>
-              <small>{{ p.price.toLocaleString() }}원</small>
-            </div>
-            <button @click="add(p)">담기</button>
-          </div>
-        </div>
-      </div>
+    <svg viewBox="0 0 220 160" width="440" height="320"
+         style="background:#fafafa;border:1px solid #ddd;border-radius:10px;">
+      <g v-if="item">
+        <circle
+            v-if="item.kind==='circle'"
+            :cx="item.x + 110"  :cy="item.y + 80"
+            :r="item.radius"
+            :fill="item.color" stroke="#333" stroke-width="1"
+        />
+        <rect
+            v-else
+            :x="item.x + 110 - item.width/2" :y="item.y + 80 - item.height/2"
+            :width="item.width" :height="item.height"
+            :fill="item.color" stroke="#333" stroke-width="1" rx="4" ry="4"
+        />
+      </g>
+    </svg>
 
-      <!-- 장바구니 + Undo/Redo -->
-      <div style="border:1px solid #ddd; border-radius:10px; overflow:hidden;">
-        <header style="display:flex; justify-content:space-between; align-items:center; padding:10px 12px; background:#333;">
-          <b>장바구니</b>
-          <div style="display:flex; gap:8px;">
-            <button @click="undo" :disabled="!caretaker.canUndo()">↩️ Undo</button>
-            <button @click="redo" :disabled="!caretaker.canRedo()">↪️ Redo</button>
-            <button @click="clearAll">🧹 비우기</button>
-          </div>
-        </header>
+    <!-- 조작 패널 -->
+    <div v-if="item" style="margin-top:12px; display:flex; gap:10px; flex-wrap:wrap;">
+      <button @click="nudge(-5,0)">←</button>
+      <button @click="nudge(5,0)">→</button>
+      <button @click="nudge(0,-5)">↑</button>
+      <button @click="nudge(0,5)">↓</button>
+      <button @click="grow">크게</button>
+      <button @click="shrink">작게</button>
 
-        <div style="padding:12px;">
-          <div v-if="!items.length" style="opacity:.7;">담긴 상품이 없습니다.</div>
+      <label style="margin-left:8px;">색상:
+        <input type="color" :value="item.color"
+               @input="setColor(($event.target as HTMLInputElement).value)" />
+      </label>
+    </div>
 
-          <div v-for="it in items" :key="it.id"
-               style="display:grid; grid-template-columns: 1fr auto auto auto; gap:8px; align-items:center; border-bottom:1px solid #f0f0f0; padding:8px 0;">
-            <div>
-              <div><b>{{ it.name }}</b></div>
-              <small>{{ it.price.toLocaleString() }}원</small>
-            </div>
-            <div style="display:flex; gap:6px; align-items:center;">
-              <button @click="dec(it.id)">-</button>
-              <span style="min-width:24px; text-align:center;">{{ it.qty }}</span>
-              <button @click="inc(it.id)">+</button>
-            </div>
-            <div style="text-align:right; min-width:90px;">
-              <b>{{ (it.price * it.qty).toLocaleString() }}원</b>
-            </div>
-            <div>
-              <button @click="remove(it.id)">삭제</button>
-            </div>
-          </div>
-
-          <div style="text-align:right; margin-top:10px;">
-            <b>합계:</b> {{ subtotal.toLocaleString() }}원
-          </div>
-        </div>
-
-        <hr style="border:none; border-top:1px solid #eee; margin:0;" />
-
-        <!-- 히스토리 -->
-        <div style="padding:12px;">
-          <h4 style="margin:0 0 8px 0;">스냅샷 히스토리 (undo stack)</h4>
-          <ol style="margin:0; padding-left:18px; max-height:180px; overflow:auto;">
-            <li v-for="m in caretaker.history().undo" :key="m.ts">
-              {{ formatTime(m.ts) }} <span v-if="m.tag"> — {{ m.tag }}</span>
-            </li>
-          </ol>
-          <div v-if="caretaker.history().redo.length" style="opacity:.7; margin-top:6px;">
-            <small>redo 대기 {{ caretaker.history().redo.length }}개</small>
-          </div>
-        </div>
-      </div>
-    </section>
+    <h3 style="margin-top:16px;">로그</h3>
+    <pre style="background:#333; padding:12px; border-radius:8px; white-space:pre-wrap;">
+{{ log.join('\n') }}
+    </pre>
   </main>
 </template>
 
 <style scoped>
 button {
-  padding: 6px 12px;
+  padding: 8px 14px;
   border: none;
-  border-radius: 8px;
+  border-radius: 10px;
   cursor: pointer;
   background: #444; color: #fff; transition: .15s;
 }
 button:hover { background: #666; }
-button:disabled { opacity: .45; cursor: not-allowed; }
 </style>
